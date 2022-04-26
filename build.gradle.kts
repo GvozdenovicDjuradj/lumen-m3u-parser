@@ -1,10 +1,11 @@
 @file:Suppress("UnstableApiUsage")
 
-import com.diffplug.spotless.LineEnding
+//import com.diffplug.spotless.LineEnding
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
+@Suppress("DSL_SCOPE_VIOLATION")
 plugins {
-    alias(libs.plugins.spotless)
+//    alias(libs.plugins.spotless)
     alias(libs.plugins.detekt)
     jacoco
     idea
@@ -15,13 +16,28 @@ plugins {
     alias(libs.plugins.dokka)
     signing
     `maven-publish`
+    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
 
 group = "com.github.bjoernpetersen"
-version = "1.3.0"
+version = "1.3.0-SNAPSHOT"
+
+nexusPublishing {
+    repositories {
+        sonatype {  //only for users registered in Sonatype after 24 Feb 2021
+            allowInsecureProtocol.set(true)
+            nexusUrl.set(uri("http://167.99.216.189:8082/repository/maven-releases/"))
+            snapshotRepositoryUrl.set(uri("http://167.99.216.189:8082/repository/maven-snapshots/"))
+            username.set("admin")
+            password.set("admin123")
+        }
+    }
+}
 
 repositories {
-    mavenCentral()
+    maven { url = uri("http://167.99.216.189:8082/repository/maven-public/")
+        isAllowInsecureProtocol = true}
+//    mavenCentral()
 }
 
 idea {
@@ -38,23 +54,23 @@ java {
     withSourcesJar()
 }
 
-spotless {
-    kotlin {
-        ktlint()
-        lineEndings = LineEnding.UNIX
-        endWithNewline()
-    }
-    kotlinGradle {
-        ktlint()
-        lineEndings = LineEnding.UNIX
-        endWithNewline()
-    }
-    format("markdown") {
-        target("**/*.md")
-        lineEndings = LineEnding.UNIX
-        endWithNewline()
-    }
-}
+//spotless {
+//    kotlin {
+//        ktlint()
+//        lineEndings = LineEnding.UNIX
+//        endWithNewline()
+//    }
+//    kotlinGradle {
+//        ktlint()
+//        lineEndings = LineEnding.UNIX
+//        endWithNewline()
+//    }
+//    format("markdown") {
+//        target("**/*.md")
+//        lineEndings = LineEnding.UNIX
+//        endWithNewline()
+//    }
+//}
 
 detekt {
     toolVersion = libs.versions.detekt.get()
@@ -183,6 +199,6 @@ publishing {
     }
 }
 
-signing {
-    sign(publishing.publications.getByName("Maven"))
-}
+//signing {
+//    sign(publishing.publications.getByName("Maven"))
+//}
