@@ -1,10 +1,7 @@
 package net.bjoernpetersen.m3u
 
 import mu.KotlinLogging
-import net.bjoernpetersen.m3u.model.M3uEntry
-import net.bjoernpetersen.m3u.model.M3uMetadata
-import net.bjoernpetersen.m3u.model.MediaLocation
-import net.bjoernpetersen.m3u.model.MediaPath
+import net.bjoernpetersen.m3u.model.*
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -12,7 +9,8 @@ import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
-import java.util.LinkedList
+import java.util.*
+import kotlin.collections.HashMap
 import kotlin.streams.asSequence
 
 /**
@@ -38,6 +36,10 @@ object M3uParser {
     private val logger = KotlinLogging.logger { }
 
     private val infoRegex = Regex(EXTENDED_INFO)
+
+    private val vodExtensions = listOf("mkv", "avi", "mp4", "mov", "wmv", "flv", "webm")
+
+    private val seriesTitleRegex = Regex("[*]?[s]{1}(eason|ezona)?[' ']?[0-9]+[' ']{0,}[e]{1}(pisode|pizoda)?[' ']?[0-9]+[*]?")
 
     /**
      * Parses the specified file.
@@ -168,13 +170,23 @@ object M3uParser {
             logger.warn(e) { "Could not parse as location: $location" }
             return null
         }
-
         val duration = infoMatch.groups[SECONDS]?.value?.toLong()
             ?.let { if (it < 0) null else it }
             ?.let { Duration.ofSeconds(it) }
-        val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
-        val title = infoMatch.groups[TITLE]?.value
-        return M3uEntry(mediaLocation, duration, title, metadata)
+        val title = infoMatch.groups[TITLE]?.value?:""
+        return if (isVod(mediaLocation.toString())) {
+            if(isSeries(title)){
+                val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
+                M3uEntrySeries(mediaLocation, duration, title, metadata)
+            }
+            else {
+                val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
+                M3uEntryMovie(mediaLocation, duration, title, metadata)
+            }
+        } else{
+            val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
+            M3uEntryChannel(mediaLocation, duration, title, metadata)
+        }
     }
 
     private fun parseMetadata(keyValues: String?): M3uMetadata {
@@ -235,5 +247,14 @@ object M3uParser {
         }
 
         resolveRecursively(parsed, charset, result)
+    }
+
+    private fun isVod(url: String): Boolean {
+        return vodExtensions.contains(url.split(".").last())
+    }
+
+    private fun isSeries(title: String): Boolean {
+//        return title.lowercase(Locale.getDefault()).matches(seriesTitleRegex)
+        return seriesTitleRegex.containsMatchIn(title.lowercase(Locale.getDefault()))
     }
 }

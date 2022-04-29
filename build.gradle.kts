@@ -20,7 +20,7 @@ plugins {
 }
 
 group = "com.github.bjoernpetersen"
-version = "1.3.0-SNAPSHOT"
+version = "1.3.2-SNAPSHOT"
 
 nexusPublishing {
     repositories {
