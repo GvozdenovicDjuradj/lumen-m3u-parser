@@ -22,6 +22,17 @@ import kotlin.streams.asSequence
  * - an [InputStreamReader]
  * - a string containing the content of an `.m3u` file
  */
+
+data class ContentResponse(
+    val liveStreams: MutableList<Any> = mutableListOf(),
+    val movies:MutableList<Any> = mutableListOf(),
+    val series:MutableList<Any> = mutableListOf(),
+
+    val liveStreamCategories:MutableList<Any> = mutableListOf(),
+    val moviesCategories:MutableList<Any> = mutableListOf(),
+    val seriesCategories:MutableList<Any> = mutableListOf()
+)
+
 object M3uParser {
     private const val COMMENT_START = '#'
     private const val EXTENDED_HEADER = "${COMMENT_START}EXTM3U"
@@ -40,7 +51,10 @@ object M3uParser {
     private val vodExtensions = listOf("mkv", "avi", "mp4", "mov", "wmv", "flv", "webm")
 
     private val seriesTitleRegex = Regex("[*]?[s]{1}(eason|ezona)?[' ']?[0-9]+[' ']{0,}[e]{1}(pisode|pizoda)?[' ']?[0-9]+[*]?")
-
+    private val seasonRegex = Regex("[s]{1}(eason|ezona)?[' ']?[0-9]+")
+    private val episodeRegex = Regex("[e]{1}(pisode|pizoda)?[' ']?[0-9]+")
+    private val numberRegex = Regex("[0-9]+")
+    private val contentResponse = ContentResponse()
     /**
      * Parses the specified file.
      *
@@ -175,9 +189,12 @@ object M3uParser {
             ?.let { Duration.ofSeconds(it) }
         val title = infoMatch.groups[TITLE]?.value?:""
         return if (isVod(mediaLocation.toString())) {
-            if(isSeries(title)){
+            val seriesInfo = getSeriesInfo(title)
+            if(seriesInfo != null){
                 val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
-                M3uEntrySeries(mediaLocation, duration, title, metadata)
+                val seriesEntry = M3uEntrySeries(mediaLocation, duration, title, metadata)
+                contentResponse.series.add(seriesEntry)
+                seriesEntry
             }
             else {
                 val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
@@ -253,8 +270,12 @@ object M3uParser {
         return vodExtensions.contains(url.split(".").last())
     }
 
-    private fun isSeries(title: String): Boolean {
-//        return title.lowercase(Locale.getDefault()).matches(seriesTitleRegex)
-        return seriesTitleRegex.containsMatchIn(title.lowercase(Locale.getDefault()))
+    private fun getSeriesInfo(title: String): Pair<Int, Int>? {
+        val seriesInfo =  seriesTitleRegex.find(title.lowercase(Locale.getDefault()))?.value?:return null
+        val seasonInfo = seasonRegex.find(seriesInfo)?.value?:return null
+        val episodeInfo = episodeRegex.find(seriesInfo)?.value?:return null
+        val seasonNumber = numberRegex.find(seasonInfo)?.value?.toInt()?:return null
+        val episodeNumber = numberRegex.find(episodeInfo)?.value?.toInt()?:return null
+        return Pair(seasonNumber, episodeNumber)
     }
 }
