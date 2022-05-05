@@ -24,14 +24,80 @@ import kotlin.streams.asSequence
  */
 
 data class ContentResponse(
-    val liveStreams: MutableList<Any> = mutableListOf(),
-    val movies:MutableList<Any> = mutableListOf(),
-    val series:MutableList<Any> = mutableListOf(),
+    val liveStreams: MutableList<liveStreamResponse> = mutableListOf(),
+    val movies: MutableList<MoviesResponse> = mutableListOf(),
+    val series: MutableList<SeriesResponse> = mutableListOf(),
 
-    val liveStreamCategories:MutableList<Any> = mutableListOf(),
-    val moviesCategories:MutableList<Any> = mutableListOf(),
-    val seriesCategories:MutableList<Any> = mutableListOf()
+    val liveStreamCategories: MutableList<Any> = mutableListOf(),
+    val moviesCategories: MutableList<Any> = mutableListOf(),
+    val seriesCategories: MutableList<Any> = mutableListOf()
 )
+
+data class liveStreamResponse(
+    val num: Long? = null,
+    val name: String? = null,
+    val stream_type: String? = null,
+    val stream_id: Long? = null,
+    val stream_icon: String? = null,
+    val epg_channel_id: String? = null,
+    val added: String? = null,
+    val category_id: String? = null,
+    val custom_sid: String? = null,
+    val tv_archive: Int? = null,
+    val direct_source: String? = null,
+    val tv_archive_duration: Int? = null,
+    var stream_url: String? = "",
+    var duration:Long? = null
+)
+
+data class MoviesResponse(
+    val num: Long? = null,
+    val name: String? = null,
+    val stream_type: String? = null,
+    val stream_id: Long? = null,
+    val stream_icon: String? = null,
+    val rating: String? = null,
+    val rating_5based: Float? = null,
+    val added: String? = null,
+    val category_id: String?,
+    val container_extension: String? = null,
+    val custom_sid: String? = null,
+    val direct_source: String? = null,
+    var stream_url: String? = "",
+    var duration:Long? = null
+)
+
+data class SeriesResponse(
+    val num: Long? = null,
+    val name: String? = null,
+    val series_id: Int? = null,
+    val cover: String? = null,
+    val plot: String? = null,
+    val cast: String? = null,
+    val director: String? = null,
+    val genre: String? = null,
+    val releaseDate: String? = null,
+    val last_modified: String? = null,
+    val rating: String? = null,
+    val rating_5based: Float? = null,
+    val backdrop_path: List<String> = listOf(),
+    val youtube_trailer: String? = null,
+    val episode_run_time: String? = null,
+    val category_id: String? = null,
+    val episodes: MutableList<MutableList<EpisodeEntryResponse?>> = mutableListOf(),
+)
+
+data class EpisodeEntryResponse(
+    var stream_url: String? = null,
+    val episode_title: String? = null,
+    val episode_id: String? = null,
+    val episode_num: Int? = null,
+    val container_extension: String? = null,
+    var season: Int? = null,
+    val duration_ts: Long? = null,
+    val duration: Long? = null
+)
+
 
 object M3uParser {
     private const val COMMENT_START = '#'
@@ -50,11 +116,12 @@ object M3uParser {
 
     private val vodExtensions = listOf("mkv", "avi", "mp4", "mov", "wmv", "flv", "webm")
 
-    private val seriesTitleRegex = Regex("[*]?[s]{1}(eason|ezona)?[' ']?[0-9]+[' ']{0,}[e]{1}(pisode|pizoda)?[' ']?[0-9]+[*]?")
-    private val seasonRegex = Regex("[s]{1}(eason|ezona)?[' ']?[0-9]+")
-    private val episodeRegex = Regex("[e]{1}(pisode|pizoda)?[' ']?[0-9]+")
+    private val seriesTitleRegex = Regex("[s](eason|ezona)?.{0,2}[0-9]+.*[e](pisode|pizoda)?.{0,2}[0-9]+")
+    private val seasonRegex = Regex("[s](eason|ezona)?.{0,5}[0-9]+")
+    private val episodeRegex = Regex("[e](pisode|pizoda)?.{0,5}[0-9]+")
     private val numberRegex = Regex("[0-9]+")
     private val contentResponse = ContentResponse()
+
     /**
      * Parses the specified file.
      *
@@ -119,6 +186,57 @@ object M3uParser {
         charset: Charset = Charsets.UTF_8
     ): List<M3uEntry> {
         return resolveRecursively(entries, charset)
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun parseAndFormat(m3uFile: Path, charset: Charset = Charsets.UTF_8): ContentResponse {
+        return parseAndFormat(Files.lines(m3uFile, charset).asSequence(), m3uFile.parent)
+    }
+
+    private fun parseAndFormat(lines: Sequence<String>, baseDir: Path?): ContentResponse {
+        val filtered = lines
+            .filterNot { it.isBlank() }
+            .map { it.trimEnd() }
+            .dropWhile { it == EXTENDED_HEADER }
+            .iterator()
+
+        if (!filtered.hasNext()) return contentResponse
+
+        val entries = LinkedList<M3uEntry>()
+
+        var currentLine: String
+        var match: MatchResult? = null
+        while (filtered.hasNext()) {
+            currentLine = filtered.next()
+
+            while (currentLine.startsWith(COMMENT_START)) {
+                val newMatch = infoRegex.matchEntire(currentLine)
+                if (newMatch != null) {
+                    if (match != null) logger.debug { "Ignoring info line: ${match!!.value}" }
+                    match = newMatch
+                } else {
+                    logger.debug { "Ignoring comment line $currentLine" }
+                }
+
+                if (filtered.hasNext()) currentLine = filtered.next()
+                else return contentResponse
+            }
+
+            val entry = if (currentLine.startsWith(COMMENT_START)) continue
+            else if (match == null) {
+                parseSimple(currentLine, baseDir)
+            } else {
+                parseExtended(match, currentLine, baseDir)
+            }
+
+            match = null
+
+            if (entry != null) entries.add(entry)
+            else logger.warn("Ignored line $currentLine")
+        }
+
+        return contentResponse
     }
 
     // TODO: fix detekt issues
@@ -187,21 +305,22 @@ object M3uParser {
         val duration = infoMatch.groups[SECONDS]?.value?.toLong()
             ?.let { if (it < 0) null else it }
             ?.let { Duration.ofSeconds(it) }
-        val title = infoMatch.groups[TITLE]?.value?:""
+        val title = infoMatch.groups[TITLE]?.value ?: ""
         return if (isVod(mediaLocation.toString())) {
             val seriesInfo = getSeriesInfo(title)
-            if(seriesInfo != null){
+            if (seriesInfo != null) {
                 val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
                 val seriesEntry = M3uEntrySeries(mediaLocation, duration, title, metadata)
-                contentResponse.series.add(seriesEntry)
+                addEpisodeToResponse(mediaLocation, duration, title, metadata, seriesInfo)
                 seriesEntry
-            }
-            else {
+            } else {
                 val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
+                addMovieToResponse(mediaLocation, duration, title, metadata)
                 M3uEntryMovie(mediaLocation, duration, title, metadata)
             }
-        } else{
+        } else {
             val metadata = parseMetadata(infoMatch.groups[KEY_VALUE_PAIRS]?.value)
+            addStreamToResponse(mediaLocation, duration, title, metadata)
             M3uEntryChannel(mediaLocation, duration, title, metadata)
         }
     }
@@ -270,12 +389,128 @@ object M3uParser {
         return vodExtensions.contains(url.split(".").last())
     }
 
-    private fun getSeriesInfo(title: String): Pair<Int, Int>? {
-        val seriesInfo =  seriesTitleRegex.find(title.lowercase(Locale.getDefault()))?.value?:return null
-        val seasonInfo = seasonRegex.find(seriesInfo)?.value?:return null
-        val episodeInfo = episodeRegex.find(seriesInfo)?.value?:return null
-        val seasonNumber = numberRegex.find(seasonInfo)?.value?.toInt()?:return null
-        val episodeNumber = numberRegex.find(episodeInfo)?.value?.toInt()?:return null
-        return Pair(seasonNumber, episodeNumber)
+    private fun addEpisodeToResponse(
+        mediaLocation: MediaLocation,
+        duration: Duration?,
+        title: String,
+        metadata: M3uMetadata,
+        seriesInfo: Triple<String, Int, Int>
+    ) {
+        val episodeNum = seriesInfo.third
+        val seasonNum = seriesInfo.second
+        val seriesTitle = seriesInfo.first
+        val episodeEntryResponse = EpisodeEntryResponse(
+            stream_url = mediaLocation.toString(),
+            episode_title = title,
+            episode_id = null,
+            episode_num = episodeNum,
+            container_extension = null,
+            season = seasonNum,
+            duration_ts = null,
+            duration = duration?.seconds
+        )
+        var seriesResponseIndex = contentResponse.series.indexOfFirst { it.name == seriesTitle }
+        if (seriesResponseIndex < 0) {
+            contentResponse.series.add(0,
+                SeriesResponse(
+                    num = null,
+                    name = seriesTitle,
+                    series_id = null,
+                    cover = metadata.getOrDefault("tvg-logo", null),
+                    plot = null,
+                    cast = null,
+                    director = null,
+                    genre = null,
+                    releaseDate = null,
+                    last_modified = null,
+                    rating = null,
+                    rating_5based = null,
+                    backdrop_path = listOf(),
+                    youtube_trailer = null,
+                    episode_run_time = null,
+                    category_id = null,
+                    episodes = mutableListOf(),
+                )
+            )
+            seriesResponseIndex = 0
+        }
+        var seasonsCount = contentResponse.series[seriesResponseIndex].episodes.count()
+        while (contentResponse.series[seriesResponseIndex].episodes.count() < seasonNum+1) {
+            contentResponse.series[seriesResponseIndex].episodes.add(mutableListOf())
+            seasonsCount+=1
+        }
+        if (seriesResponseIndex<0 || seasonNum<1){
+            return
+        }
+        var episodesCount = contentResponse.series[seriesResponseIndex].episodes[seasonNum].count()
+        while (episodeNum >= episodesCount) {
+            contentResponse.series[seriesResponseIndex].episodes[seasonNum].add(null)
+            episodesCount += 1
+        }
+        contentResponse.series[seriesResponseIndex].episodes[seasonNum][episodeNum] = episodeEntryResponse
+    }
+
+    private fun addMovieToResponse(
+        mediaLocation: MediaLocation,
+        duration: Duration?,
+        title: String,
+        metadata: M3uMetadata
+    ) {
+        contentResponse.movies.add(
+            MoviesResponse(
+                num = null,
+                name = title,
+                stream_type = null,
+                stream_id = null,
+                stream_icon = metadata.getOrDefault("tvg-logo", null),
+                rating = null,
+                rating_5based = null,
+                added = null,
+                category_id = null,
+                container_extension = null,
+                custom_sid = null,
+                direct_source = null,
+                stream_url = mediaLocation.toString(),
+                duration = duration?.seconds
+            )
+        )
+    }
+
+    private fun addStreamToResponse(
+        mediaLocation: MediaLocation,
+        duration: Duration?,
+        title: String,
+        metadata: M3uMetadata
+    ) {
+        contentResponse.liveStreams.add(
+            liveStreamResponse(
+                num = null,
+                name = title,
+                stream_type = null,
+                stream_id = null,
+                stream_icon = metadata.getOrDefault("tvg-logo", null),
+                epg_channel_id = null,
+                added = null,
+                category_id = null,
+                custom_sid = null,
+                tv_archive = null,
+                direct_source = null,
+                tv_archive_duration = null,
+                stream_url = mediaLocation.toString(),
+                duration = duration?.seconds
+            )
+        )
+
+    }
+
+    private fun getSeriesInfo(title: String): Triple<String, Int, Int>? {
+        val seriesInfo = seriesTitleRegex.find(title.lowercase(Locale.getDefault()))?.value ?: return null
+        val seasonInfo = seasonRegex.find(seriesInfo)?.value ?: return null
+        val episodeInfo = episodeRegex.find(seriesInfo)?.value ?: return null
+        val seasonNumber = numberRegex.find(seasonInfo)?.value?.toInt() ?: return null
+        val episodeNumber = numberRegex.find(episodeInfo)?.value?.toInt() ?: return null
+        val seriesTitleRange = seriesTitleRegex.find(title.lowercase(Locale.getDefault()))?.range ?: return null
+        val seriesTitle = title.replaceRange(seriesTitleRange.first, seriesTitleRange.last + 1, "")
+        return Triple(seriesTitle, seasonNumber, episodeNumber)
     }
 }
