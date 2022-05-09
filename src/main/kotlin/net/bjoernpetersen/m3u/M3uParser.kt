@@ -1,5 +1,11 @@
 package net.bjoernpetersen.m3u
 
+import dto.response.content.ContentResponse
+import dto.response.m3u8.M3u8EpisodeEntryResponse
+import dto.response.m3u8.M3u8LiveStreamsResponse
+import dto.response.m3u8.M3u8MoviesResponse
+import dto.response.m3u8.M3u8SeriesResponse
+import enumClasses.ContentType
 import mu.KotlinLogging
 import net.bjoernpetersen.m3u.model.*
 import java.io.IOException
@@ -23,82 +29,6 @@ import kotlin.streams.asSequence
  * - a string containing the content of an `.m3u` file
  */
 
-data class ContentResponse(
-    val liveStreams: MutableList<liveStreamResponse> = mutableListOf(),
-    val movies: MutableList<MoviesResponse> = mutableListOf(),
-    val series: MutableList<SeriesResponse> = mutableListOf(),
-
-    val liveStreamCategories: MutableList<Any> = mutableListOf(),
-    val moviesCategories: MutableList<Any> = mutableListOf(),
-    val seriesCategories: MutableList<Any> = mutableListOf()
-)
-
-data class liveStreamResponse(
-    val num: Long? = null,
-    val name: String? = null,
-    val stream_type: String? = null,
-    val stream_id: Long? = null,
-    val stream_icon: String? = null,
-    val epg_channel_id: String? = null,
-    val added: String? = null,
-    val category_id: String? = null,
-    val custom_sid: String? = null,
-    val tv_archive: Int? = null,
-    val direct_source: String? = null,
-    val tv_archive_duration: Int? = null,
-    var stream_url: String? = "",
-    var duration:Long? = null
-)
-
-data class MoviesResponse(
-    val num: Long? = null,
-    val name: String? = null,
-    val stream_type: String? = null,
-    val stream_id: Long? = null,
-    val stream_icon: String? = null,
-    val rating: String? = null,
-    val rating_5based: Float? = null,
-    val added: String? = null,
-    val category_id: String?,
-    val container_extension: String? = null,
-    val custom_sid: String? = null,
-    val direct_source: String? = null,
-    var stream_url: String? = "",
-    var duration:Long? = null
-)
-
-data class SeriesResponse(
-    val num: Long? = null,
-    val name: String? = null,
-    val series_id: Int? = null,
-    val cover: String? = null,
-    val plot: String? = null,
-    val cast: String? = null,
-    val director: String? = null,
-    val genre: String? = null,
-    val releaseDate: String? = null,
-    val last_modified: String? = null,
-    val rating: String? = null,
-    val rating_5based: Float? = null,
-    val backdrop_path: List<String> = listOf(),
-    val youtube_trailer: String? = null,
-    val episode_run_time: String? = null,
-    val category_id: String? = null,
-    val episodes: MutableList<MutableList<EpisodeEntryResponse?>> = mutableListOf(),
-)
-
-data class EpisodeEntryResponse(
-    var stream_url: String? = null,
-    val episode_title: String? = null,
-    val episode_id: String? = null,
-    val episode_num: Int? = null,
-    val container_extension: String? = null,
-    var season: Int? = null,
-    val duration_ts: Long? = null,
-    val duration: Long? = null
-)
-
-
 object M3uParser {
     private const val COMMENT_START = '#'
     private const val EXTENDED_HEADER = "${COMMENT_START}EXTM3U"
@@ -116,11 +46,11 @@ object M3uParser {
 
     private val vodExtensions = listOf("mkv", "avi", "mp4", "mov", "wmv", "flv", "webm")
 
-    private val seriesTitleRegex = Regex("[s](eason|ezona)?.{0,2}[0-9]+.*[e](pisode|pizoda)?.{0,2}[0-9]+")
-    private val seasonRegex = Regex("[s](eason|ezona)?.{0,5}[0-9]+")
-    private val episodeRegex = Regex("[e](pisode|pizoda)?.{0,5}[0-9]+")
-    private val numberRegex = Regex("[0-9]+")
-    private val contentResponse = ContentResponse()
+    private val seriesTitleRegex = Regex("[s](eason|ezona)?.{0,2}[0-9]{1,2}[^0-9].*[e](pisode|pizoda)?.{0,2}[0-9]{1,2}")
+    private val seasonRegex = Regex("[s](eason|ezona)?.{0,2}[0-9]{1,2}[^0-9]")
+    private val episodeRegex = Regex("[e](pisode|pizoda)?.{0,2}[0-9]{1,2}")
+    private val numberRegex = Regex("[0-9]{1,2}")
+    private val contentResponse = ContentResponse(contentType = ContentType.M3U)
 
     /**
      * Parses the specified file.
@@ -186,6 +116,12 @@ object M3uParser {
         charset: Charset = Charsets.UTF_8
     ): List<M3uEntry> {
         return resolveRecursively(entries, charset)
+    }
+
+    @JvmStatic
+    @JvmOverloads
+    fun parseAndFormat(m3uContent: String, baseDir: Path? = null): ContentResponse {
+        return parseAndFormat(m3uContent.lineSequence(), baseDir)
     }
 
     @JvmStatic
@@ -399,7 +335,7 @@ object M3uParser {
         val episodeNum = seriesInfo.third
         val seasonNum = seriesInfo.second
         val seriesTitle = seriesInfo.first
-        val episodeEntryResponse = EpisodeEntryResponse(
+        val episodeEntryResponse = M3u8EpisodeEntryResponse(
             stream_url = mediaLocation.toString(),
             episode_title = title,
             episode_id = null,
@@ -407,12 +343,12 @@ object M3uParser {
             container_extension = null,
             season = seasonNum,
             duration_ts = null,
-            duration = duration?.seconds
+            duration = duration?.seconds.toString()
         )
         var seriesResponseIndex = contentResponse.series.indexOfFirst { it.name == seriesTitle }
         if (seriesResponseIndex < 0) {
             contentResponse.series.add(0,
-                SeriesResponse(
+                M3u8SeriesResponse(
                     num = null,
                     name = seriesTitle,
                     series_id = null,
@@ -457,7 +393,7 @@ object M3uParser {
         metadata: M3uMetadata
     ) {
         contentResponse.movies.add(
-            MoviesResponse(
+            M3u8MoviesResponse(
                 num = null,
                 name = title,
                 stream_type = null,
@@ -483,7 +419,7 @@ object M3uParser {
         metadata: M3uMetadata
     ) {
         contentResponse.liveStreams.add(
-            liveStreamResponse(
+            M3u8LiveStreamsResponse(
                 num = null,
                 name = title,
                 stream_type = null,

@@ -20,7 +20,7 @@ plugins {
 }
 
 group = "com.github.bjoernpetersen"
-version = "1.3.10-SNAPSHOT"
+version = "1.3.0-SNAPSHOT"
 
 nexusPublishing {
     repositories {
@@ -139,6 +139,7 @@ tasks {
 dependencies {
     api(libs.slf4j.api)
     implementation(libs.kotlin.logging)
+    implementation("rs.lumen.lib:lumen-commons:1.0.8-SNAPSHOT")
 
     testImplementation(libs.junit.api)
     testImplementation(libs.assertj.core)
