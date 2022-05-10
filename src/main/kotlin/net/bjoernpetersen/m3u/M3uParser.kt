@@ -1,10 +1,7 @@
 package net.bjoernpetersen.m3u
 
 import dto.response.content.ContentResponse
-import dto.response.m3u8.M3u8EpisodeEntryResponse
-import dto.response.m3u8.M3u8LiveStreamsResponse
-import dto.response.m3u8.M3u8MoviesResponse
-import dto.response.m3u8.M3u8SeriesResponse
+import dto.response.m3u8.*
 import enumClasses.ContentType
 import mu.KotlinLogging
 import net.bjoernpetersen.m3u.model.*
@@ -50,7 +47,7 @@ object M3uParser {
     private val seasonRegex = Regex("[s](eason|ezona)?.{0,2}[0-9]{1,2}[^0-9]")
     private val episodeRegex = Regex("[e](pisode|pizoda)?.{0,2}[0-9]{1,2}")
     private val numberRegex = Regex("[0-9]{1,2}")
-    private val contentResponse = ContentResponse(contentType = ContentType.M3U)
+    private val contentResponse = M3u8ContentResponse()
 
     /**
      * Parses the specified file.
@@ -120,17 +117,17 @@ object M3uParser {
 
     @JvmStatic
     @JvmOverloads
-    fun parseAndFormat(m3uContent: String, baseDir: Path? = null): ContentResponse {
+    fun parseAndFormat(m3uContent: String, baseDir: Path? = null): M3u8ContentResponse {
         return parseAndFormat(m3uContent.lineSequence(), baseDir)
     }
 
     @JvmStatic
     @JvmOverloads
-    fun parseAndFormat(m3uFile: Path, charset: Charset = Charsets.UTF_8): ContentResponse {
+    fun parseAndFormat(m3uFile: Path, charset: Charset = Charsets.UTF_8): M3u8ContentResponse {
         return parseAndFormat(Files.lines(m3uFile, charset).asSequence(), m3uFile.parent)
     }
 
-    private fun parseAndFormat(lines: Sequence<String>, baseDir: Path?): ContentResponse {
+    private fun parseAndFormat(lines: Sequence<String>, baseDir: Path?): M3u8ContentResponse {
         val filtered = lines
             .filterNot { it.isBlank() }
             .map { it.trimEnd() }
