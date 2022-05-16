@@ -139,7 +139,7 @@ tasks {
 dependencies {
     api(libs.slf4j.api)
     implementation(libs.kotlin.logging)
-    implementation("rs.lumen.lib:lumen-commons:1.0.10-SNAPSHOT")
+    implementation("rs.lumen.lib:lumen-commons:1.0.6-SNAPSHOT")
 
     testImplementation(libs.junit.api)
     testImplementation(libs.assertj.core)

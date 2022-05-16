@@ -369,18 +369,18 @@ object M3uParser {
         }
         var seasonsCount = contentResponse.series[seriesResponseIndex].episodes.count()
         while (contentResponse.series[seriesResponseIndex].episodes.count() < seasonNum+1) {
-            contentResponse.series[seriesResponseIndex].episodes.add(mutableListOf())
+            contentResponse.series[seriesResponseIndex].episodes.add(M3uSeasonResponse())
             seasonsCount+=1
         }
         if (seriesResponseIndex<0 || seasonNum<1){
             return
         }
-        var episodesCount = contentResponse.series[seriesResponseIndex].episodes[seasonNum].count()
+        var episodesCount = contentResponse.series[seriesResponseIndex].episodes[seasonNum]?.episodes?.count()?:0
         while (episodeNum >= episodesCount) {
-            contentResponse.series[seriesResponseIndex].episodes[seasonNum].add(null)
+            contentResponse.series[seriesResponseIndex].episodes[seasonNum]?.episodes?.add(null)
             episodesCount += 1
         }
-        contentResponse.series[seriesResponseIndex].episodes[seasonNum][episodeNum] = episodeEntryResponse
+        contentResponse.series[seriesResponseIndex].episodes[seasonNum]?.episodes?.set(episodeNum, episodeEntryResponse)
     }
 
     private fun addMovieToResponse(
@@ -403,6 +403,8 @@ object M3uParser {
                 container_extension = null,
                 custom_sid = null,
                 direct_source = null,
+                genre = null,
+                description = null,
                 stream_url = mediaLocation.toString(),
                 duration = duration?.seconds
             )
