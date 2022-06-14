@@ -1,6 +1,6 @@
 package net.bjoernpetersen.m3u
 
-import dto.response.content.ContentResponse
+import dto.response.content.*
 import dto.response.m3u8.*
 import enumClasses.ContentType
 import mu.KotlinLogging
@@ -332,7 +332,7 @@ object M3uParser {
         val episodeNum = seriesInfo.third
         val seasonNum = seriesInfo.second
         val seriesTitle = seriesInfo.first
-        val episodeEntryResponse = M3u8EpisodeEntryResponse(
+        val episodeEntryResponse = EpisodeEntryResponse(
             stream_url = mediaLocation.toString(),
             episode_title = title,
             episode_id = null,
@@ -345,7 +345,7 @@ object M3uParser {
         var seriesResponseIndex = contentResponse.series.indexOfFirst { it.name == seriesTitle }
         if (seriesResponseIndex < 0) {
             contentResponse.series.add(0,
-                M3u8SeriesResponse(
+                SeriesResponse(
                     num = null,
                     name = seriesTitle,
                     series_id = null,
@@ -390,7 +390,7 @@ object M3uParser {
         metadata: M3uMetadata
     ) {
         contentResponse.movies.add(
-            M3u8MoviesResponse(
+            MoviesResponse(
                 num = null,
                 name = title,
                 stream_type = null,
@@ -418,7 +418,7 @@ object M3uParser {
         metadata: M3uMetadata
     ) {
         contentResponse.liveStreams.add(
-            M3u8LiveStreamsResponse(
+            LiveStreamsResponse(
                 num = null,
                 name = title,
                 stream_type = null,
