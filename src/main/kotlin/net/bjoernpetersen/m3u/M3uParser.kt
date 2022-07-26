@@ -118,7 +118,16 @@ object M3uParser {
     @JvmStatic
     @JvmOverloads
     fun parseAndFormat(m3uContent: String, baseDir: Path? = null): M3u8ContentResponse {
-        return parseAndFormat(m3uContent.lineSequence(), baseDir)
+        val response = parseAndFormat(m3uContent.lineSequence(), baseDir)
+        response.series.map { series ->
+            series.episodes = series.episodes.filter { (it?.episodes?.count() ?: -1) > 0 }.toMutableList()
+        }
+        response.series.forEach { series ->
+            series.episodes.forEach { season ->
+                season?.episodes?.removeIf { it == null }
+            }
+        }
+        return response
     }
 
     @JvmStatic
@@ -344,7 +353,8 @@ object M3uParser {
         )
         var seriesResponseIndex = contentResponse.series.indexOfFirst { it.name == seriesTitle }
         if (seriesResponseIndex < 0) {
-            contentResponse.series.add(0,
+            contentResponse.series.add(
+                0,
                 SeriesResponse(
                     num = null,
                     name = seriesTitle,
@@ -368,14 +378,14 @@ object M3uParser {
             seriesResponseIndex = 0
         }
         var seasonsCount = contentResponse.series[seriesResponseIndex].episodes.count()
-        while (contentResponse.series[seriesResponseIndex].episodes.count() < seasonNum+1) {
+        while (contentResponse.series[seriesResponseIndex].episodes.count() < seasonNum + 1) {
             contentResponse.series[seriesResponseIndex].episodes.add(M3uSeasonResponse())
-            seasonsCount+=1
+            seasonsCount += 1
         }
-        if (seriesResponseIndex<0 || seasonNum<1){
+        if (seriesResponseIndex < 0 || seasonNum < 1) {
             return
         }
-        var episodesCount = contentResponse.series[seriesResponseIndex].episodes[seasonNum]?.episodes?.count()?:0
+        var episodesCount = contentResponse.series[seriesResponseIndex].episodes[seasonNum]?.episodes?.count() ?: 0
         while (episodeNum >= episodesCount) {
             contentResponse.series[seriesResponseIndex].episodes[seasonNum]?.episodes?.add(null)
             episodesCount += 1
